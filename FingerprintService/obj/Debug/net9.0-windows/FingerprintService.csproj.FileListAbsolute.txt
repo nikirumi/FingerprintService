@@ -1,0 +1,5 @@
+C:\FingerprintService\FingerprintService\obj\Debug\net9.0-windows\FingerprintService.csproj.AssemblyReference.cache
+C:\FingerprintService\FingerprintService\obj\Debug\net9.0-windows\FingerprintService.GeneratedMSBuildEditorConfig.editorconfig
+C:\FingerprintService\FingerprintService\obj\Debug\net9.0-windows\FingerprintService.AssemblyInfoInputs.cache
+C:\FingerprintService\FingerprintService\obj\Debug\net9.0-windows\FingerprintService.AssemblyInfo.cs
+C:\FingerprintService\FingerprintService\obj\Debug\net9.0-windows\FingerprintService.csproj.CoreCompileInputs.cache

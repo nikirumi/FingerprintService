@@ -1,0 +1,12 @@
+{
+  "Version": 1,
+  "Hash": "ClSNwZZob6M2NiBlT7tfeR17LagezuEfGxs02KFDASs=",
+  "Source": "FingerprintService",
+  "BasePath": "_content/FingerprintService",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [],
+  "Assets": [],
+  "Endpoints": []
+}
