@@ -1,257 +1,162 @@
-using System;
-using System.Reflection;
+using Microsoft.AspNetCore.Mvc;
 using SecuGen.FDxSDKPro.Windows;
+using System.Text.Json;
+using System.Threading.Tasks;
+using System;
+using System.Linq;
 
-namespace FingerprintService
+var builder = WebApplication.CreateBuilder(args);
+
+// Add services
+builder.Services.AddControllers();
+builder.Services.AddCors(options =>
 {
-    class Program
+    options.AddDefaultPolicy(policy =>
     {
-        static void Main(string[] args)
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader();
+    });
+});
+
+var app = builder.Build();
+
+// Configure pipeline - CORS must be before routing!
+app.UseCors();
+app.UseRouting();
+app.MapControllers();
+
+app.Run("http://localhost:5000");
+
+[ApiController]
+[Route("")]
+public class FingerprintController : ControllerBase
+{
+    [HttpPost("enroll")]
+    public async Task<IActionResult> EnrollFingerprint()
+    {
+        SGFingerPrintManager fpm = new SGFingerPrintManager();
+        
+        try
         {
-            SGFingerPrintManager fpm = new SGFingerPrintManager();
+            // Initialize and open device
+            int error = fpm.EnumerateDevice();
+            if (error != 0)
+                return Ok(new { success = false, error = $"Failed to enumerate devices: {error}" });
 
-            try
+            if (fpm.NumberOfDevice == 0)
+                return Ok(new { success = false, error = "No fingerprint scanner detected" });
+
+            // Try to initialize device
+            error = fpm.Init((SGFPMDeviceName)0);
+            if (error != 0)
             {
-                Console.WriteLine("Starting SecuGen Fingerprint Scanner...");
+                // Try other device IDs
+                for (int deviceId = 1; deviceId <= 10; deviceId++)
+                {
+                    error = fpm.Init((SGFPMDeviceName)deviceId);
+                    if (error == 0) break;
+                }
+            }
 
-                // First, let's discover what's available in the SDK
-                DiscoverAvailableConstants();
+            if (error != 0)
+                return Ok(new { success = false, error = $"Failed to initialize device: {error}" });
 
-                // Enumerate devices - simplest approach
-                int error = fpm.EnumerateDevice();
-                Console.WriteLine("EnumerateDevice result: " + error + " (0 = success)");
-
+            // Open device
+            error = fpm.OpenDevice(0);
+            if (error != 0)
+            {
+                error = fpm.OpenDevice(-1);
                 if (error != 0)
                 {
-                    Console.WriteLine("Failed to enumerate devices. Error: " + error);
-                    return;
-                }
-
-                // Get number of devices
-                int deviceCount = fpm.NumberOfDevice;
-                Console.WriteLine("Devices Found: " + deviceCount);
-
-                if (deviceCount == 0)
-                {
-                    Console.WriteLine("No fingerprint devices detected.");
-                    Console.WriteLine("Make sure:");
-                    Console.WriteLine("1. Device is connected via USB");
-                    Console.WriteLine("2. SecuGen drivers are installed");
-                    Console.WriteLine("3. Device is not being used by another application");
-                    return;
-                }
-
-                // Try to get device list info
-                try
-                {
-                    SGFPMDeviceList deviceList = new SGFPMDeviceList();
-                    error = fpm.GetEnumDeviceInfo(0, deviceList);
-                    if (error == 0)
-                    {
-                        Console.WriteLine("Found device in slot 0");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine("GetEnumDeviceInfo failed: " + ex.Message);
-                }
-
-                // Initialize device - try different approaches
-                Console.WriteLine("\nTrying to initialize device...");
-                
-                // Try with 0 (often means auto-detect)
-                error = fpm.Init((SGFPMDeviceName)0);
-                Console.WriteLine("Init (0 - auto) result: " + error);
-
-                if (error != 0)
-                {
-                    // Try with different device IDs (1-10 are common)
-                    for (int deviceId = 1; deviceId <= 10; deviceId++)
-                    {
-                        error = fpm.Init((SGFPMDeviceName)deviceId);
-                        Console.WriteLine($"Init ({deviceId}) result: " + error);
-                        if (error == 0) break;
-                    }
-                }
-
-                if (error != 0)
-                {
-                    Console.WriteLine("Failed to initialize device with any ID. Error: " + error);
-                    return;
-                }
-
-                Console.WriteLine("✓ Device initialized successfully!");
-
-                // Open the device - try different port approaches
-                Console.WriteLine("Opening device...");
-                
-                // Try auto-detect first (usually 0 or -1)
-                error = fpm.OpenDevice(0);
-                Console.WriteLine("OpenDevice (0) result: " + error);
-
-                if (error != 0)
-                {
-                    error = fpm.OpenDevice(-1);
-                    Console.WriteLine("OpenDevice (-1) result: " + error);
-                }
-
-                if (error != 0)
-                {
-                    // Try different USB port numbers
                     for (int port = 1; port <= 4; port++)
                     {
                         error = fpm.OpenDevice(port);
-                        Console.WriteLine($"OpenDevice ({port}) result: " + error);
                         if (error == 0) break;
                     }
                 }
+            }
 
-                if (error != 0)
-                {
-                    Console.WriteLine("Failed to open device. Error: " + error);
-                    return;
-                }
+            if (error != 0)
+                return Ok(new { success = false, error = $"Failed to open device: {error}" });
 
-                Console.WriteLine("✓ Device opened successfully!");
+            // Get device info
+            SGFPMDeviceInfoParam info = new SGFPMDeviceInfoParam();
+            error = fpm.GetDeviceInfo(info);
+            if (error != 0)
+                return Ok(new { success = false, error = $"Failed to get device info: {error}" });
 
-                // Get device info
-                SGFPMDeviceInfoParam info = new SGFPMDeviceInfoParam();
-                error = fpm.GetDeviceInfo(info);
-                
+            // Capture fingerprint with timeout
+            byte[] fpImage = new byte[info.ImageWidth * info.ImageHeight];
+            
+            // Wait for finger placement (with timeout)
+            var startTime = DateTime.Now;
+            var timeout = TimeSpan.FromSeconds(30); // 30 second timeout
+            
+            while (DateTime.Now - startTime < timeout)
+            {
+                error = fpm.GetImage(fpImage);
                 if (error == 0)
                 {
-                    Console.WriteLine("\n=== Device Information ===");
-                    Console.WriteLine("Device serial: " + info.DeviceSN);
-                    Console.WriteLine("Image DPI: " + info.ImageDPI);
-                    Console.WriteLine("Image size: " + info.ImageWidth + "x" + info.ImageHeight);
-                    Console.WriteLine("Device ID: " + info.DeviceID);
-                    Console.WriteLine("Firmware: " + info.FWVersion);
-                    Console.WriteLine("=========================\n");
-
-                    // Capture a fingerprint image
-                    Console.WriteLine("Ready to capture fingerprint!");
-                    Console.WriteLine("Place your finger on the scanner and press any key...");
-                    Console.ReadKey();
-
-                    Console.WriteLine("Capturing image...");
-                    byte[] fpImage = new byte[info.ImageWidth * info.ImageHeight];
-                    error = fpm.GetImage(fpImage);
-
-                    Console.WriteLine("GetImage result: " + error);
-                    
-                    if (error == 0)
-                    {
-                        Console.WriteLine("✓ Fingerprint image captured successfully!");
-                        Console.WriteLine("Image size: " + fpImage.Length + " bytes");
-                        
-                        // Check if we actually got image data
-                        bool hasData = false;
-                        for (int i = 0; i < Math.Min(fpImage.Length, 100); i++)
-                        {
-                            if (fpImage[i] != 0)
-                            {
-                                hasData = true;
-                                break;
-                            }
-                        }
-                        
-                        if (hasData)
-                        {
-                            Console.WriteLine("✓ Image contains valid data!");
-                            
-                            // Save the image
-                            try
-                            {
-                                System.IO.File.WriteAllBytes("fingerprint.raw", fpImage);
-                                Console.WriteLine("✓ Image saved as fingerprint.raw");
-                            }
-                            catch (Exception ex)
-                            {
-                                Console.WriteLine("Failed to save image: " + ex.Message);
-                            }
-                        }
-                        else
-                        {
-                            Console.WriteLine("⚠ Image appears to be empty (all zeros)");
-                        }
-                    }
-                    else
-                    {
-                        Console.WriteLine("Failed to capture fingerprint. Error: " + error);
-                        Console.WriteLine("Make sure finger is properly placed on scanner.");
-                    }
+                    // Check if image has actual data
+                    bool hasData = fpImage.Take(100).Any(b => b != 0);
+                    if (hasData)
+                        break;
                 }
-                else
-                {
-                    Console.WriteLine("Failed to get device info. Error: " + error);
-                }
+                
+                // Small delay before retry
+                await Task.Delay(100);
+            }
 
-                // Close device
-                fpm.CloseDevice();
-                Console.WriteLine("\n✓ Device closed successfully.");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Exception: " + ex.Message);
-                Console.WriteLine("Stack trace: " + ex.StackTrace);
-            }
-            finally
-            {
-                Console.WriteLine("\nPress any key to exit...");
-                Console.ReadKey();
-            }
-        }
+            if (error != 0)
+                return Ok(new { success = false, error = $"Failed to capture fingerprint: {error}. Make sure finger is placed on scanner." });
 
-        static void DiscoverAvailableConstants()
-        {
-            Console.WriteLine("\n=== Discovering SDK Constants ===");
+            // Create template
+            byte[] template = new byte[400]; // Standard SecuGen template size
+            error = fpm.CreateTemplate(fpImage, template);
             
-            try
-            {
-                // Check SGFPMError enum
-                Type errorType = typeof(SGFPMError);
-                Console.WriteLine("SGFPMError values:");
-                foreach (var value in Enum.GetValues(errorType))
-                {
-                    Console.WriteLine($"  {value} = {(int)value}");
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Could not enumerate SGFPMError: " + ex.Message);
-            }
+            if (error != 0)
+                return Ok(new { success = false, error = $"Failed to create template: {error}" });
 
-            try
-            {
-                // Check SGFPMDeviceName enum
-                Type deviceType = typeof(SGFPMDeviceName);
-                Console.WriteLine("\nSGFPMDeviceName values:");
-                foreach (var value in Enum.GetValues(deviceType))
-                {
-                    Console.WriteLine($"  {value} = {(int)value}");
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Could not enumerate SGFPMDeviceName: " + ex.Message);
-            }
+            // Convert to base64
+            string templateBase64 = Convert.ToBase64String(template);
 
-            try
-            {
-                // Check SGFPMPortAddr enum
-                Type portType = typeof(SGFPMPortAddr);
-                Console.WriteLine("\nSGFPMPortAddr values:");
-                foreach (var value in Enum.GetValues(portType))
-                {
-                    Console.WriteLine($"  {value} = {(int)value}");
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Could not enumerate SGFPMPortAddr: " + ex.Message);
-            }
+            // Close device
+            fpm.CloseDevice();
 
-            Console.WriteLine("=================================\n");
+            return Ok(new { 
+                success = true, 
+                templateBase64 = templateBase64,
+                imageSize = fpImage.Length,
+                templateSize = template.Length
+            });
+        }
+        catch (Exception ex)
+        {
+            try { fpm.CloseDevice(); } catch { }
+            return Ok(new { success = false, error = $"Exception: {ex.Message}" });
+        }
+    }
+
+    [HttpGet("status")]
+    public IActionResult GetStatus()
+    {
+        SGFingerPrintManager fpm = new SGFingerPrintManager();
+        
+        try
+        {
+            int error = fpm.EnumerateDevice();
+            int deviceCount = error == 0 ? fpm.NumberOfDevice : 0;
+            
+            return Ok(new { 
+                success = true,
+                devicesFound = deviceCount,
+                scannerReady = deviceCount > 0
+            });
+        }
+        catch (Exception ex)
+        {
+            return Ok(new { success = false, error = ex.Message });
         }
     }
 }
