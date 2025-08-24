@@ -36,7 +36,7 @@ public class FingerprintController : ControllerBase
     public async Task<IActionResult> EnrollFingerprint()
     {
         SGFingerPrintManager fpm = new SGFingerPrintManager();
-        
+
         try
         {
             // Initialize and open device
@@ -88,11 +88,11 @@ public class FingerprintController : ControllerBase
 
             // Capture fingerprint with timeout
             byte[] fpImage = new byte[info.ImageWidth * info.ImageHeight];
-            
+
             // Wait for finger placement (with timeout)
             var startTime = DateTime.Now;
             var timeout = TimeSpan.FromSeconds(30); // 30 second timeout
-            
+
             while (DateTime.Now - startTime < timeout)
             {
                 error = fpm.GetImage(fpImage);
@@ -103,7 +103,7 @@ public class FingerprintController : ControllerBase
                     if (hasData)
                         break;
                 }
-                
+
                 // Small delay before retry
                 await Task.Delay(100);
             }
@@ -114,7 +114,7 @@ public class FingerprintController : ControllerBase
             // Create template
             byte[] template = new byte[400]; // Standard SecuGen template size
             error = fpm.CreateTemplate(fpImage, template);
-            
+
             if (error != 0)
                 return Ok(new { success = false, error = $"Failed to create template: {error}" });
 
@@ -124,8 +124,9 @@ public class FingerprintController : ControllerBase
             // Close device
             fpm.CloseDevice();
 
-            return Ok(new { 
-                success = true, 
+            return Ok(new
+            {
+                success = true,
                 templateBase64 = templateBase64,
                 imageSize = fpImage.Length,
                 templateSize = template.Length
@@ -142,13 +143,14 @@ public class FingerprintController : ControllerBase
     public IActionResult GetStatus()
     {
         SGFingerPrintManager fpm = new SGFingerPrintManager();
-        
+
         try
         {
             int error = fpm.EnumerateDevice();
             int deviceCount = error == 0 ? fpm.NumberOfDevice : 0;
-            
-            return Ok(new { 
+
+            return Ok(new
+            {
                 success = true,
                 devicesFound = deviceCount,
                 scannerReady = deviceCount > 0
@@ -158,5 +160,127 @@ public class FingerprintController : ControllerBase
         {
             return Ok(new { success = false, error = ex.Message });
         }
+    }
+
+    [HttpPost("verify")]
+    public async Task<IActionResult> VerifyFingerprint([FromBody] VerifyRequest request)
+    {
+        SGFingerPrintManager fpm = new SGFingerPrintManager();
+        
+        try
+        {
+            // Initialize and open device (same as enroll)
+            int error = fpm.EnumerateDevice();
+            if (error != 0)
+                return Ok(new { success = false, error = $"Failed to enumerate devices: {error}" });
+
+            if (fpm.NumberOfDevice == 0)
+                return Ok(new { success = false, error = "No fingerprint scanner detected" });
+
+            // Initialize device
+            error = fpm.Init((SGFPMDeviceName)0);
+            if (error != 0)
+            {
+                for (int deviceId = 1; deviceId <= 10; deviceId++)
+                {
+                    error = fpm.Init((SGFPMDeviceName)deviceId);
+                    if (error == 0) break;
+                }
+            }
+
+            if (error != 0)
+                return Ok(new { success = false, error = $"Failed to initialize device: {error}" });
+
+            // Open device
+            error = fpm.OpenDevice(0);
+            if (error != 0)
+            {
+                error = fpm.OpenDevice(-1);
+                if (error != 0)
+                {
+                    for (int port = 1; port <= 4; port++)
+                    {
+                        error = fpm.OpenDevice(port);
+                        if (error == 0) break;
+                    }
+                }
+            }
+
+            if (error != 0)
+                return Ok(new { success = false, error = $"Failed to open device: {error}" });
+
+            // Get device info
+            SGFPMDeviceInfoParam info = new SGFPMDeviceInfoParam();
+            error = fpm.GetDeviceInfo(info);
+            if (error != 0)
+                return Ok(new { success = false, error = $"Failed to get device info: {error}" });
+
+            // Capture fingerprint for verification
+            byte[] fpImage = new byte[info.ImageWidth * info.ImageHeight];
+            
+            var startTime = DateTime.Now;
+            var timeout = TimeSpan.FromSeconds(30);
+            
+            while (DateTime.Now - startTime < timeout)
+            {
+                error = fpm.GetImage(fpImage);
+                if (error == 0)
+                {
+                    bool hasData = fpImage.Take(100).Any(b => b != 0);
+                    if (hasData)
+                        break;
+                }
+                
+                await Task.Delay(100);
+            }
+
+            if (error != 0)
+                return Ok(new { success = false, error = $"Failed to capture fingerprint: {error}. Make sure finger is placed on scanner." });
+
+            // Create template from captured image
+            byte[] capturedTemplate = new byte[400];
+            error = fpm.CreateTemplate(fpImage, capturedTemplate);
+            
+            if (error != 0)
+                return Ok(new { success = false, error = $"Failed to create template: {error}" });
+
+            // Convert stored template from base64
+            byte[] storedTemplate;
+            try
+            {
+                storedTemplate = Convert.FromBase64String(request.StoredTemplate);
+            }
+            catch
+            {
+                return Ok(new { success = false, error = "Invalid stored template format" });
+            }
+
+            // Perform matching - Fixed to use bool instead of int
+            bool isMatch = false;
+            error = fpm.MatchTemplate(capturedTemplate, storedTemplate, SGFPMSecurityLevel.NORMAL, ref isMatch);
+            
+            // Close device
+            fpm.CloseDevice();
+
+            if (error != 0)
+                return Ok(new { success = false, error = $"Matching failed: {error}" });
+
+            return Ok(new { 
+                success = true, 
+                isMatch = isMatch,
+                message = isMatch ? "Fingerprint matches!" : "Fingerprint does not match."
+            });
+        }
+        catch (Exception ex)
+        {
+            try { fpm.CloseDevice(); } catch { }
+            return Ok(new { success = false, error = $"Exception: {ex.Message}" });
+        }
+    }
+
+    // Request model for verification
+    public class VerifyRequest
+    {
+        public string StoredTemplate { get; set; } = "";
     }
 }
