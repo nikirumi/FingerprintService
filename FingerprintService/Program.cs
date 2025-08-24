@@ -278,9 +278,149 @@ public class FingerprintController : ControllerBase
         }
     }
 
-    // Request model for verification
+    [HttpPost("search")]
+    public async Task<IActionResult> SearchFingerprint([FromBody] SearchRequest request)
+    {
+        SGFingerPrintManager fpm = new SGFingerPrintManager();
+        
+        try
+        {
+            // Initialize and open device (same as enroll)
+            int error = fpm.EnumerateDevice();
+            if (error != 0)
+                return Ok(new { success = false, error = $"Failed to enumerate devices: {error}" });
+
+            if (fpm.NumberOfDevice == 0)
+                return Ok(new { success = false, error = "No fingerprint scanner detected" });
+
+            // Initialize device
+            error = fpm.Init((SGFPMDeviceName)0);
+            if (error != 0)
+            {
+                for (int deviceId = 1; deviceId <= 10; deviceId++)
+                {
+                    error = fpm.Init((SGFPMDeviceName)deviceId);
+                    if (error == 0) break;
+                }
+            }
+
+            if (error != 0)
+                return Ok(new { success = false, error = $"Failed to initialize device: {error}" });
+
+            // Open device
+            error = fpm.OpenDevice(0);
+            if (error != 0)
+            {
+                error = fpm.OpenDevice(-1);
+                if (error != 0)
+                {
+                    for (int port = 1; port <= 4; port++)
+                    {
+                        error = fpm.OpenDevice(port);
+                        if (error == 0) break;
+                    }
+                }
+            }
+
+            if (error != 0)
+                return Ok(new { success = false, error = $"Failed to open device: {error}" });
+
+            // Get device info
+            SGFPMDeviceInfoParam info = new SGFPMDeviceInfoParam();
+            error = fpm.GetDeviceInfo(info);
+            if (error != 0)
+                return Ok(new { success = false, error = $"Failed to get device info: {error}" });
+
+            // Capture fingerprint ONCE for searching
+            byte[] fpImage = new byte[info.ImageWidth * info.ImageHeight];
+            
+            var startTime = DateTime.Now;
+            var timeout = TimeSpan.FromSeconds(30);
+            
+            while (DateTime.Now - startTime < timeout)
+            {
+                error = fpm.GetImage(fpImage);
+                if (error == 0)
+                {
+                    bool hasData = fpImage.Take(100).Any(b => b != 0);
+                    if (hasData)
+                        break;
+                }
+                
+                await Task.Delay(100);
+            }
+
+            if (error != 0)
+                return Ok(new { success = false, error = $"Failed to capture fingerprint: {error}. Make sure finger is placed on scanner." });
+
+            // Create template from captured image
+            byte[] capturedTemplate = new byte[400];
+            error = fpm.CreateTemplate(fpImage, capturedTemplate);
+            
+            if (error != 0)
+                return Ok(new { success = false, error = $"Failed to create template: {error}" });
+
+            // Close device (we're done with the scanner)
+            fpm.CloseDevice();
+
+            // Now compare against all provided templates
+            var matches = new List<object>();
+            
+            foreach (var templateData in request.Templates)
+            {
+                try
+                {
+                    // Convert stored template from base64
+                    byte[] storedTemplate = Convert.FromBase64String(templateData.Template);
+                    
+                    // Perform matching
+                    bool isMatch = false;
+                    error = fpm.MatchTemplate(capturedTemplate, storedTemplate, SGFPMSecurityLevel.NORMAL, ref isMatch);
+                    
+                    if (error == 0 && isMatch)
+                    {
+                        matches.Add(new
+                        {
+                            userId = templateData.UserId,
+                            isMatch = true
+                        });
+                    }
+                }
+                catch
+                {
+                    // Skip invalid templates
+                    continue;
+                }
+            }
+
+            return Ok(new { 
+                success = true, 
+                matches = matches,
+                totalTested = request.Templates.Count,
+                matchesFound = matches.Count
+            });
+        }
+        catch (Exception ex)
+        {
+            try { fpm.CloseDevice(); } catch { }
+            return Ok(new { success = false, error = $"Exception: {ex.Message}" });
+        }
+    }
+
+    // Request models
     public class VerifyRequest
     {
         public string StoredTemplate { get; set; } = "";
+    }
+
+    public class SearchRequest
+    {
+        public List<TemplateData> Templates { get; set; } = new();
+    }
+
+    public class TemplateData
+    {
+        public int UserId { get; set; }
+        public string Template { get; set; } = "";
     }
 }
