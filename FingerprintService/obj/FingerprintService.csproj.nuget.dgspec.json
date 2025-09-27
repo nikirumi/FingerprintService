@@ -1,25 +1,31 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\cooki\\OneDrive\\Desktop\\FingerprintService\\FingerprintService\\FingerprintService.csproj": {}
+    "C:\\FingerprintService\\FingerprintService\\FingerprintService.csproj": {}
   },
   "projects": {
-    "C:\\Users\\cooki\\OneDrive\\Desktop\\FingerprintService\\FingerprintService\\FingerprintService.csproj": {
+    "C:\\FingerprintService\\FingerprintService\\FingerprintService.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\cooki\\OneDrive\\Desktop\\FingerprintService\\FingerprintService\\FingerprintService.csproj",
+        "projectUniqueName": "C:\\FingerprintService\\FingerprintService\\FingerprintService.csproj",
         "projectName": "FingerprintService",
-        "projectPath": "C:\\Users\\cooki\\OneDrive\\Desktop\\FingerprintService\\FingerprintService\\FingerprintService.csproj",
-        "packagesPath": "C:\\Users\\cooki\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\cooki\\OneDrive\\Desktop\\FingerprintService\\FingerprintService\\obj\\",
+        "projectPath": "C:\\FingerprintService\\FingerprintService\\FingerprintService.csproj",
+        "packagesPath": "C:\\Users\\Nabi\\.nuget\\packages\\",
+        "outputPath": "C:\\FingerprintService\\FingerprintService\\obj\\",
         "projectStyle": "PackageReference",
+        "fallbackFolders": [
+          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
+        ],
         "configFilePaths": [
-          "C:\\Users\\cooki\\AppData\\Roaming\\NuGet\\NuGet.Config"
+          "C:\\Users\\Nabi\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
         ],
         "originalTargetFrameworks": [
           "net6.0-windows"
         ],
         "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
@@ -38,7 +44,7 @@
           "auditLevel": "low",
           "auditMode": "direct"
         },
-        "SdkAnalysisLevel": "9.0.300"
+        "SdkAnalysisLevel": "9.0.100"
       },
       "frameworks": {
         "net6.0-windows7.0": {
@@ -54,24 +60,6 @@
           ],
           "assetTargetFallback": true,
           "warn": true,
-          "downloadDependencies": [
-            {
-              "name": "Microsoft.AspNetCore.App.Ref",
-              "version": "[6.0.36, 6.0.36]"
-            },
-            {
-              "name": "Microsoft.NETCore.App.Host.win-x64",
-              "version": "[6.0.36, 6.0.36]"
-            },
-            {
-              "name": "Microsoft.NETCore.App.Ref",
-              "version": "[6.0.36, 6.0.36]"
-            },
-            {
-              "name": "Microsoft.WindowsDesktop.App.Ref",
-              "version": "[6.0.36, 6.0.36]"
-            }
-          ],
           "frameworkReferences": {
             "Microsoft.AspNetCore.App": {
               "privateAssets": "none"
@@ -83,7 +71,7 @@
               "privateAssets": "none"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.304\\RuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.102\\RuntimeIdentifierGraph.json"
         }
       }
     }

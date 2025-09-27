@@ -62,3 +62,4 @@ C:\Users\cooki\OneDrive\Desktop\FingerprintService\FingerprintService\obj\Debug\
 C:\Users\cooki\OneDrive\Desktop\FingerprintService\FingerprintService\obj\Debug\net6.0-windows\Fingerpr.3FFA6C8B.Up2Date
 C:\Users\cooki\OneDrive\Desktop\FingerprintService\FingerprintService\obj\Debug\net6.0-windows\FingerprintService.genruntimeconfig.cache
 C:\Users\cooki\OneDrive\Desktop\FingerprintService\FingerprintService\obj\Debug\net6.0-windows\ref\FingerprintService.dll
+C:\FingerprintService\FingerprintService\obj\Debug\net6.0-windows\FingerprintService.sourcelink.json
